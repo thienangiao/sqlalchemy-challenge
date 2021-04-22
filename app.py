@@ -30,6 +30,8 @@ Station = Base.classes.station
 #################################################
 app = Flask(__name__)
 
+def toDate(dateString): 
+    return dt.datetime.strptime(dateString, "%Y-%m-%d").date()
 
 #################################################
 # Flask Routes
@@ -42,8 +44,15 @@ def welcome():
         f"Available Routes:<br/>"
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
-        f"/api/v1.0/tobs"
-        f"/api/v1.0/<start>"
+        f"/api/v1.0/tobs<br/>"
+        f"<br/>"
+        f"<br/>"
+        f"Route with a start date:<br/>"
+        f"/api/v1.0/start_date/yyyy-mm-dd<start>"
+        f"<br/>"
+        f"<br/>"
+        f"Route with a start date and end date:<br/>"
+        f"/api/v1.0/start_end_date/yyyy-mm-dd,yyyy-mm-dd<start><end>"
     )
 
 
@@ -105,21 +114,55 @@ def tobs():
 
     return jsonify(active_stations)
 
-@app.route("/api/v1.0/<start>")
-def tobs(start_date):
-    """Fetch data that matches
-       the path variable supplied by the user, or a 404 if not."""
 
-    search_dt = start_date.replace(" ", "").lower()
-    for temp in justice_league_members:
-        search_term = character["real_name"].replace(" ", "").lower()
+@app.route("/api/v1.0/start_date/<start>")
 
-        if search_term == search_dt:
-            return jsonify(character)
+def start(start): 
 
-    return jsonify({"error": f"{start_date} data not found."}), 404
+    # Create our session (link) from Python to the DB
+    session = Session(engine)
+
+    """Return a dictionary of date and precipitation values"""
+    # Query
+    from_dt=toDate(start)
+    results = session.query(func.min(Measure.tobs),func.max(Measure.tobs),func.avg(Measure.tobs)).\
+            filter(Measure.date >= from_dt).filter(Measure.tobs != None).all()
+
+    session.close()
+
+       # Create a dictionary from the row data and append to a list of all_precipitation
+    stats = []
+    for tmin, tmax, tavg in results:
+        stats_dict = {"Minimum Temp":tmin,"Maximum Temp":tmax,"Average Temp":tavg}
+        stats.append(stats_dict)
+
+    return jsonify(stats)
 
 
+@app.route("/api/v1.0/start_end_date/<start>,<end>")
 
+def start_end(start,end): 
+
+    # Create our session (link) from Python to the DB
+    session = Session(engine)
+
+    """Return a dictionary of date and precipitation values"""
+    # Query
+    from_dt=toDate(start)
+    to_dt=toDate(end)
+    results = session.query(func.min(Measure.tobs),func.max(Measure.tobs),func.avg(Measure.tobs)).\
+            filter(Measure.date >= from_dt).filter(Measure.date <= to_dt).filter(Measure.tobs != None).all()
+
+    session.close()
+
+       # Create a dictionary from the row data and append to a list of all_precipitation
+    stats = []
+    for tmin, tmax, tavg in results:
+        stats_dict = {"Minimum Temp":tmin,"Maximum Temp":tmax,"Average Temp":tavg}
+        stats.append(stats_dict)
+
+    return jsonify(stats)
+
+    
 if __name__ == '__main__':
     app.run(debug=True)
